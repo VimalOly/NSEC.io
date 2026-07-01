@@ -1,105 +1,62 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>NSEC Olympiad Platform</title>
-
-<style>
-body {
-  font-family: Arial;
-  background: #0f172a;
-  color: white;
-  text-align: center;
-  padding: 20px;
-}
-h1 { color: #38bdf8; }
-
-input, button {
-  padding: 10px;
-  margin: 8px;
-  border-radius: 8px;
-  border: none;
-}
-button {
-  background: #38bdf8;
-  cursor: pointer;
-  font-weight: bold;
-}
-
-.box {
-  display: none;
-  background: #1e293b;
-  padding: 20px;
-  margin-top: 20px;
-  border-radius: 12px;
-}
-
-.correct { color: lightgreen; }
-.wrong { color: red; }
-</style>
-</head>
-
-<body>
-
-<h1>🧪 NSEC Olympiad Platform</h1>
-
-<input id="name" placeholder="Enter your name">
-<br>
-<input id="chapter" placeholder="Enter chapter (e.g. Chemical Bonding)">
-<br>
-<button onclick="startRevision()">Start</button>
-
-<div id="conceptBox" class="box"></div>
-<div id="confirmBox" class="box"></div>
-<div id="testBox" class="box"></div>
-<div id="resultBox" class="box"></div>
-<div id="leaderboardBox" class="box"></div>
-
 <script>
 
-let score = 0;
-let timeLeft = 60;
-let timer;
+// ================= DATA =================
 
 const concepts = {
-  "Chemical Bonding": [
+  "chemical bonding": [
     "VSEPR Theory",
     "Hybridization",
-    "MOT",
+    "Molecular Orbital Theory",
     "Bond Polarity"
   ],
-  "Thermodynamics": [
+  "thermodynamics": [
     "First Law",
     "Entropy",
-    "Gibbs Energy"
+    "Gibbs Free Energy"
   ]
 };
 
-const questions = [
-  {
-    type: "mcq",
-    q: "Hybridization of CH4?",
-    options: ["sp", "sp2", "sp3", "dsp2"],
-    answer: "sp3"
-  },
-  {
-    type: "mcq",
-    q: "Which is polar?",
-    options: ["CO2", "H2O", "BF3", "CH4"],
-    answer: "H2O"
-  },
-  {
-    type: "num",
-    q: "pH of neutral solution?",
-    answer: "7"
-  }
-];
+const questionBank = {
+  "chemical bonding": [
+    {
+      type: "mcq",
+      q: "Hybridization of CH4?",
+      options: ["sp", "sp2", "sp3", "dsp2"],
+      answer: "sp3"
+    },
+    {
+      type: "mcq",
+      q: "Which is polar?",
+      options: ["CO2", "H2O", "BF3", "CH4"],
+      answer: "H2O"
+    }
+  ],
+
+  "thermodynamics": [
+    {
+      type: "num",
+      q: "pH of neutral solution?",
+      answer: "7"
+    }
+  ]
+};
+
+// ================= GLOBAL =================
+
+let score = 0;
+let timeLeft = 60;
+let timer = null;
+let currentQuestions = [];
+
+// ================= CORE =================
 
 function startRevision() {
-  const chapter = document.getElementById("chapter").value;
-  if (!chapter) return alert("Enter chapter");
 
-  const list = concepts[chapter] || ["Concepts will be added"];
+  const chapterInput = document.getElementById("chapter").value.toLowerCase().trim();
+
+  if (!chapterInput) return alert("Enter chapter");
+
+  const list = concepts[chapterInput] || ["Concepts will be added soon"];
 
   document.getElementById("conceptBox").style.display = "block";
   document.getElementById("conceptBox").innerHTML =
@@ -110,26 +67,44 @@ function startRevision() {
   document.getElementById("confirmBox").style.display = "block";
   document.getElementById("confirmBox").innerHTML =
     "<h3>Are you sure?</h3>" +
-    "<button onclick='startTest()'>Yes</button>" +
+    "<button onclick='startTest(\""+chapterInput+"\")'>Yes</button>" +
     "<button onclick='alert(\"Revise more!\")'>No</button>";
 }
 
-function startTest() {
+// ================= TEST =================
+
+function startTest(chapter) {
+
+  // Stop previous timer
+  if (timer) clearInterval(timer);
+
   score = 0;
   timeLeft = 60;
+
+  const allQ = questionBank[chapter];
+
+  if (!allQ || allQ.length === 0) {
+    alert("No PYQs available for this chapter yet");
+    return;
+  }
+
+  // Random 10 questions
+  currentQuestions = shuffle(allQ).slice(0, 10);
 
   document.getElementById("testBox").style.display = "block";
 
   timer = setInterval(() => {
     timeLeft--;
     document.getElementById("timer").innerText = timeLeft;
+
     if (timeLeft <= 0) submitTest();
   }, 1000);
 
   let html = "<h2>⚡ Test Mode</h2>";
   html += "<p>⏱ Time Left: <span id='timer'>60</span>s</p>";
 
-  questions.forEach((q, i) => {
+  currentQuestions.forEach((q, i) => {
+
     html += `<p><b>Q${i+1}:</b> ${q.q}</p>`;
 
     if (q.type === "mcq") {
@@ -141,8 +116,9 @@ function startTest() {
           </label><br>`;
       });
     } else {
-      html += `<input id="q${i}">`;
+      html += `<input id="q${i}" placeholder="Enter number">`;
     }
+
   });
 
   html += "<br><button onclick='submitTest()'>Submit</button>";
@@ -150,11 +126,15 @@ function startTest() {
   document.getElementById("testBox").innerHTML = html;
 }
 
+// ================= SUBMIT =================
+
 function submitTest() {
+
   clearInterval(timer);
   score = 0;
 
-  questions.forEach((q, i) => {
+  currentQuestions.forEach((q, i) => {
+
     let userAns;
 
     if (q.type === "mcq") {
@@ -164,39 +144,70 @@ function submitTest() {
       userAns = document.getElementById("q"+i).value;
     }
 
-    if (userAns.toLowerCase() === q.answer.toLowerCase()) {
+    if (checkAnswer(userAns, q.answer)) {
       score++;
     }
+
   });
 
   showResult();
 }
 
+// ================= CHECK =================
+
+function checkAnswer(user, correct) {
+
+  if (!user) return false;
+
+  // Numeric tolerance
+  if (!isNaN(correct)) {
+    return Math.abs(parseFloat(user) - parseFloat(correct)) < 0.01;
+  }
+
+  return user.toLowerCase().trim() === correct.toLowerCase().trim();
+}
+
+// ================= UTILS =================
+
+function shuffle(arr) {
+  return arr.sort(() => Math.random() - 0.5);
+}
+
+// ================= RESULT =================
+
 function showResult() {
+
   const name = document.getElementById("name").value || "Anonymous";
 
   document.getElementById("resultBox").style.display = "block";
   document.getElementById("resultBox").innerHTML =
-    `<h2>🏆 Score: ${score}/${questions.length}</h2>`;
+    `<h2>🏆 Score: ${score}/${currentQuestions.length}</h2>`;
 
   saveScore(name, score);
   showLeaderboard();
 }
 
+// ================= LEADERBOARD =================
+
 function saveScore(name, score) {
+
   let data = JSON.parse(localStorage.getItem("leaderboard")) || [];
+
   data.push({ name, score });
 
   data.sort((a,b) => b.score - a.score);
+
   localStorage.setItem("leaderboard", JSON.stringify(data.slice(0,10)));
 }
 
 function showLeaderboard() {
+
   let data = JSON.parse(localStorage.getItem("leaderboard")) || [];
 
   document.getElementById("leaderboardBox").style.display = "block";
 
   let html = "<h2>📊 Leaderboard</h2>";
+
   data.forEach((d,i) => {
     html += `<p>${i+1}. ${d.name} - ${d.score}</p>`;
   });
@@ -205,6 +216,3 @@ function showLeaderboard() {
 }
 
 </script>
-
-</body>
-</html>
