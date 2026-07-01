@@ -1,35 +1,210 @@
-async function generateQuestions(chapter) {
-  const prompt = `
-Generate 5 NSEC-level chemistry questions from the chapter "${chapter}".
-Include:
-- 3 MCQs with 4 options
-- 2 integer/numerical questions
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NSEC Olympiad Platform</title>
 
-Return JSON format:
-[
- { "type":"mcq", "q":"...", "options":["A","B","C","D"], "answer":"..." },
- { "type":"num", "q":"...", "answer":"..." }
-]
-`;
+<style>
+body {
+  font-family: Arial;
+  background: #0f172a;
+  color: white;
+  text-align: center;
+  padding: 20px;
+}
+h1 { color: #38bdf8; }
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer YOUR_API_KEY"
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }]
-    })
+input, button {
+  padding: 10px;
+  margin: 8px;
+  border-radius: 8px;
+  border: none;
+}
+button {
+  background: #38bdf8;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.box {
+  display: none;
+  background: #1e293b;
+  padding: 20px;
+  margin-top: 20px;
+  border-radius: 12px;
+}
+
+.correct { color: lightgreen; }
+.wrong { color: red; }
+</style>
+</head>
+
+<body>
+
+<h1>🧪 NSEC Olympiad Platform</h1>
+
+<input id="name" placeholder="Enter your name">
+<br>
+<input id="chapter" placeholder="Enter chapter (e.g. Chemical Bonding)">
+<br>
+<button onclick="startRevision()">Start</button>
+
+<div id="conceptBox" class="box"></div>
+<div id="confirmBox" class="box"></div>
+<div id="testBox" class="box"></div>
+<div id="resultBox" class="box"></div>
+<div id="leaderboardBox" class="box"></div>
+
+<script>
+
+let score = 0;
+let timeLeft = 60;
+let timer;
+
+const concepts = {
+  "Chemical Bonding": [
+    "VSEPR Theory",
+    "Hybridization",
+    "MOT",
+    "Bond Polarity"
+  ],
+  "Thermodynamics": [
+    "First Law",
+    "Entropy",
+    "Gibbs Energy"
+  ]
+};
+
+const questions = [
+  {
+    type: "mcq",
+    q: "Hybridization of CH4?",
+    options: ["sp", "sp2", "sp3", "dsp2"],
+    answer: "sp3"
+  },
+  {
+    type: "mcq",
+    q: "Which is polar?",
+    options: ["CO2", "H2O", "BF3", "CH4"],
+    answer: "H2O"
+  },
+  {
+    type: "num",
+    q: "pH of neutral solution?",
+    answer: "7"
+  }
+];
+
+function startRevision() {
+  const chapter = document.getElementById("chapter").value;
+  if (!chapter) return alert("Enter chapter");
+
+  const list = concepts[chapter] || ["Concepts will be added"];
+
+  document.getElementById("conceptBox").style.display = "block";
+  document.getElementById("conceptBox").innerHTML =
+    "<h2>📚 Concepts</h2><ul>" +
+    list.map(x => "<li>"+x+"</li>").join("") +
+    "</ul>";
+
+  document.getElementById("confirmBox").style.display = "block";
+  document.getElementById("confirmBox").innerHTML =
+    "<h3>Are you sure?</h3>" +
+    "<button onclick='startTest()'>Yes</button>" +
+    "<button onclick='alert(\"Revise more!\")'>No</button>";
+}
+
+function startTest() {
+  score = 0;
+  timeLeft = 60;
+
+  document.getElementById("testBox").style.display = "block";
+
+  timer = setInterval(() => {
+    timeLeft--;
+    document.getElementById("timer").innerText = timeLeft;
+    if (timeLeft <= 0) submitTest();
+  }, 1000);
+
+  let html = "<h2>⚡ Test Mode</h2>";
+  html += "<p>⏱ Time Left: <span id='timer'>60</span>s</p>";
+
+  questions.forEach((q, i) => {
+    html += `<p><b>Q${i+1}:</b> ${q.q}</p>`;
+
+    if (q.type === "mcq") {
+      q.options.forEach(opt => {
+        html += `
+          <label>
+          <input type="radio" name="q${i}" value="${opt}">
+          ${opt}
+          </label><br>`;
+      });
+    } else {
+      html += `<input id="q${i}">`;
+    }
   });
 
-  const data = await res.json();
+  html += "<br><button onclick='submitTest()'>Submit</button>";
 
-  try {
-    return JSON.parse(data.choices[0].message.content);
-  } catch {
-    alert("Error generating questions");
-    return [];
-  }
+  document.getElementById("testBox").innerHTML = html;
 }
+
+function submitTest() {
+  clearInterval(timer);
+  score = 0;
+
+  questions.forEach((q, i) => {
+    let userAns;
+
+    if (q.type === "mcq") {
+      const selected = document.querySelector(`input[name="q${i}"]:checked`);
+      userAns = selected ? selected.value : "";
+    } else {
+      userAns = document.getElementById("q"+i).value;
+    }
+
+    if (userAns.toLowerCase() === q.answer.toLowerCase()) {
+      score++;
+    }
+  });
+
+  showResult();
+}
+
+function showResult() {
+  const name = document.getElementById("name").value || "Anonymous";
+
+  document.getElementById("resultBox").style.display = "block";
+  document.getElementById("resultBox").innerHTML =
+    `<h2>🏆 Score: ${score}/${questions.length}</h2>`;
+
+  saveScore(name, score);
+  showLeaderboard();
+}
+
+function saveScore(name, score) {
+  let data = JSON.parse(localStorage.getItem("leaderboard")) || [];
+  data.push({ name, score });
+
+  data.sort((a,b) => b.score - a.score);
+  localStorage.setItem("leaderboard", JSON.stringify(data.slice(0,10)));
+}
+
+function showLeaderboard() {
+  let data = JSON.parse(localStorage.getItem("leaderboard")) || [];
+
+  document.getElementById("leaderboardBox").style.display = "block";
+
+  let html = "<h2>📊 Leaderboard</h2>";
+  data.forEach((d,i) => {
+    html += `<p>${i+1}. ${d.name} - ${d.score}</p>`;
+  });
+
+  document.getElementById("leaderboardBox").innerHTML = html;
+}
+
+</script>
+
+</body>
+</html>
