@@ -1,0 +1,35 @@
+async function generateQuestions(chapter) {
+  const prompt = `
+Generate 5 NSEC-level chemistry questions from the chapter "${chapter}".
+Include:
+- 3 MCQs with 4 options
+- 2 integer/numerical questions
+
+Return JSON format:
+[
+ { "type":"mcq", "q":"...", "options":["A","B","C","D"], "answer":"..." },
+ { "type":"num", "q":"...", "answer":"..." }
+]
+`;
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer YOUR_API_KEY"
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+
+  const data = await res.json();
+
+  try {
+    return JSON.parse(data.choices[0].message.content);
+  } catch {
+    alert("Error generating questions");
+    return [];
+  }
+}
