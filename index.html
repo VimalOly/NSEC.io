@@ -51,7 +51,6 @@ let currentQuestions = [];
 // ================= CORE =================
 
 function startRevision() {
-
   const chapterInput = document.getElementById("chapter").value.toLowerCase().trim();
 
   if (!chapterInput) return alert("Enter chapter");
@@ -74,8 +73,7 @@ function startRevision() {
 // ================= TEST =================
 
 function startTest(chapter) {
-
-  // Stop previous timer
+  // Stop previous timer safely
   if (timer) clearInterval(timer);
 
   score = 0;
@@ -88,23 +86,16 @@ function startTest(chapter) {
     return;
   }
 
-  // Random 10 questions
+  // Slice to select a max of 10 elements safely
   currentQuestions = shuffle(allQ).slice(0, 10);
 
   document.getElementById("testBox").style.display = "block";
 
-  timer = setInterval(() => {
-    timeLeft--;
-    document.getElementById("timer").innerText = timeLeft;
-
-    if (timeLeft <= 0) submitTest();
-  }, 1000);
-
+  // 1. Build the HTML UI layout first
   let html = "<h2>⚡ Test Mode</h2>";
-  html += "<p>⏱ Time Left: <span id='timer'>60</span>s</p>";
+  html += `<p>⏱ Time Left: <span id="timer">${timeLeft}</span>s</p>`;
 
   currentQuestions.forEach((q, i) => {
-
     html += `<p><b>Q${i+1}:</b> ${q.q}</p>`;
 
     if (q.type === "mcq") {
@@ -118,36 +109,47 @@ function startTest(chapter) {
     } else {
       html += `<input id="q${i}" placeholder="Enter number">`;
     }
-
   });
 
-  html += "<br><button onclick='submitTest()'>Submit</button>";
+  html += "<br><br><button onclick='submitTest()'>Submit</button>";
 
+  // 2. Render UI markup strictly before querying the element inside the interval
   document.getElementById("testBox").innerHTML = html;
+
+  // 3. Now start the interval loop safely
+  timer = setInterval(() => {
+    timeLeft--;
+    const timerSpan = document.getElementById("timer");
+    if (timerSpan) {
+      timerSpan.innerText = timeLeft;
+    }
+
+    if (timeLeft <= 0) {
+      submitTest();
+    }
+  }, 1000);
 }
 
 // ================= SUBMIT =================
 
 function submitTest() {
-
   clearInterval(timer);
   score = 0;
 
   currentQuestions.forEach((q, i) => {
-
     let userAns;
 
     if (q.type === "mcq") {
       const selected = document.querySelector(`input[name="q${i}"]:checked`);
       userAns = selected ? selected.value : "";
     } else {
-      userAns = document.getElementById("q"+i).value;
+      const inputEl = document.getElementById("q"+i);
+      userAns = inputEl ? inputEl.value : "";
     }
 
     if (checkAnswer(userAns, q.answer)) {
       score++;
     }
-
   });
 
   showResult();
@@ -156,11 +158,10 @@ function submitTest() {
 // ================= CHECK =================
 
 function checkAnswer(user, correct) {
-
   if (!user) return false;
 
-  // Numeric tolerance
-  if (!isNaN(correct)) {
+  // Numeric tolerance check
+  if (!isNaN(correct) && !isNaN(user) && user.trim() !== "") {
     return Math.abs(parseFloat(user) - parseFloat(correct)) < 0.01;
   }
 
@@ -170,14 +171,15 @@ function checkAnswer(user, correct) {
 // ================= UTILS =================
 
 function shuffle(arr) {
-  return arr.sort(() => Math.random() - 0.5);
+  // Use spread operator to prevent mutating original questionBank arrays
+  return [...arr].sort(() => Math.random() - 0.5);
 }
 
 // ================= RESULT =================
 
 function showResult() {
-
-  const name = document.getElementById("name").value || "Anonymous";
+  const nameEl = document.getElementById("name");
+  const name = nameEl && nameEl.value ? nameEl.value : "Anonymous";
 
   document.getElementById("resultBox").style.display = "block";
   document.getElementById("resultBox").innerHTML =
@@ -190,18 +192,15 @@ function showResult() {
 // ================= LEADERBOARD =================
 
 function saveScore(name, score) {
-
   let data = JSON.parse(localStorage.getItem("leaderboard")) || [];
 
   data.push({ name, score });
-
   data.sort((a,b) => b.score - a.score);
 
   localStorage.setItem("leaderboard", JSON.stringify(data.slice(0,10)));
 }
 
 function showLeaderboard() {
-
   let data = JSON.parse(localStorage.getItem("leaderboard")) || [];
 
   document.getElementById("leaderboardBox").style.display = "block";
